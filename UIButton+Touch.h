@@ -13,7 +13,7 @@
 
 @interface UIButton (Touch)
 //按钮间隔时间,如果不设置,则为默认时间0.3s
-@property (nonatomic,assign) NSTimeInterval timer;
+@property (nonatomic,assign) NSTimeInterval timerInterval;
 
 @end
 

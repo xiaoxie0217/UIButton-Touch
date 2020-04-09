@@ -8,32 +8,28 @@
 
 #import "UIButton+Touch.h"
 #import <objc/runtime.h>
-//私有方法定义按钮是否允许点击的
 @interface UIButton ()
-//在间隔的时间内 isClick为 YES,不允许点击
-@property (nonatomic,assign) BOOL isClick;
 
+@property (nonatomic,assign) NSTimeInterval timingTimer;
 @end
-//保证全局唯一的 key,区分定义的属性(runtime 方法使用)
-static char *const timerKey = "timerKey";
-static char *const isClickKey = "isClickKey";
+static char * const timingTimerKey = "timingTimerKey";
+static char * const timerIntervalKey = "timerIntervalKey";
 
 @implementation UIButton (Touch)
-//load 和 init 的区别,以及加载时间等,请自行百度
+
 +(void)load{
-    
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        //获取系统点击的实例方法
+        //处理事件的父类，它有三种事件相应的形式：基于触摸，基于值，基于编辑
         SEL selA = @selector(sendAction:to:forEvent:);
         Method thodA = class_getInstanceMethod(self, selA);
-        //获取自己写的点击实例方法
+        //转换的方法(基于系统自己写的)
         SEL selB = @selector(mySendAction:to:forEvent:);
         Method thodB = class_getInstanceMethod(self, selB);
-        //添加方法
-        BOOL addThod = class_addMethod(self, selA, method_getImplementation(thodB), method_getTypeEncoding(thodB));
+         //添加方法
+        BOOL addB = class_addMethod(self, selA, method_getImplementation(thodB), method_getTypeEncoding(thodB));
         
-        if (addThod) {
+        if (addB) {
             //如果方法已经添加,则替换
             class_replaceMethod(self, selB, method_getImplementation(thodA), method_getTypeEncoding(thodA));
         }else{
@@ -42,44 +38,42 @@ static char *const isClickKey = "isClickKey";
         }
     });
 }
-//timer 的 set方法
--(void)setTimer:(NSTimeInterval)timer{
-/*
- &timerKey:该 key 也行可用@selector(timer)实现,就不用定义上面的属性key
- OBJC_ASSOCIATION_COPY 可以粗浅理解成定义属性的关键字
- */
-    objc_setAssociatedObject(self, &timerKey, @(timer), OBJC_ASSOCIATION_COPY);
-}
-//timer 的 get 方法
--(NSTimeInterval)timer{
-    return [objc_getAssociatedObject(self, &timerKey) doubleValue];
-}
-//isClick的 set方法
--(void)setIsClick:(BOOL)isClick{
-    objc_setAssociatedObject(self, &isClickKey, @(isClick), OBJC_ASSOCIATION_COPY);
-}
-//isClick的 get方法
--(BOOL)isClick{
-    return [objc_getAssociatedObject(self, &isClickKey) boolValue];
+#pragma mark 点击按钮的间隔时间 set和 get 方法
+-(void)setTimerInterval:(NSTimeInterval)timerInterval{
+    /*
+    &timerKey:该 key 也行可用@selector(timerIntervalKey)实现,就不用定义上面的属性key
+    OBJC_ASSOCIATION_COPY 可以粗浅理解成定义属性的关键字
+    */
+    objc_setAssociatedObject(self, &timerIntervalKey, @(timerInterval), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
-//自己写的点击方法
--(void)mySendAction:(SEL)action to:(id)target forEvent:(UIEvent *)event{
-    //判断的那个点击的控件为 UIButton 的时候才执行该方法
-    if ([NSStringFromClass(self.class) isEqualToString:@"UIButton"]) {
-        //如果时间没有规定,则用三目运算法赋初始值给 timer
-        self.timer = self.timer == 0?defaultTimer:self.timer;
-        //如果isClick为 YES 则为间隔时间,不执行方法
-        if (self.isClick) return;
-        
-        if (self.timer >0) {
-            
-            self.isClick = YES;
-            //倒计时
-            [self performSelector:@selector(setIsClick:) withObject:@(NO) afterDelay:self.timer];
-        }
+-(NSTimeInterval)timerInterval{
+    return [objc_getAssociatedObject(self, &timerIntervalKey) doubleValue];
+}
+#pragma mark 点击按钮的计时 set和 get 方法
+-(void)setTimingTimer:(NSTimeInterval)timingTimer{
+    objc_setAssociatedObject(self, &timingTimerKey, @(timingTimer), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+-(NSTimeInterval)timingTimer{
+    return [objc_getAssociatedObject(self, &timingTimerKey) doubleValue];
+}
+
+
+#pragma mark 防止暴力点击的方法
+-(void)mySendAction:(SEL)action to:(id)target forEvent:(UIControlEvents *)event{
+    //这个是判断是为了防止别的事件也走此方法
+    if ([NSStringFromClass(self.class)isEqualToString:@"UIButton"]) {
+
+        self.timerInterval = self.timerInterval == 0?defaultTimer:self.timerInterval;
+
+        if (NSDate.date.timeIntervalSince1970 - self.timingTimer < self.timerInterval) {
+               return;
+           }
+        if (self.timerInterval > 0) {
+               self.timingTimer = NSDate.date.timeIntervalSince1970;
+           }
     }
     [self mySendAction:action to:target forEvent:event];
 }
-
 @end
